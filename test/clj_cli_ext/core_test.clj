@@ -3,6 +3,8 @@
             [clj-cli-ext.core :as clie]
             [clojure.string :as string]))
 
+;;; this needs to be turned into a real test...
+
 (deftest a-test
   (testing "FIXME, I fail."
     (is (= 0 1))))
@@ -76,7 +78,7 @@
   ;; Add them all at once.
   (def mycli
     (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
-        (clie/add-sub-commands sub-options-map)
+        (clie/set-sub-commands sub-options-map)
         (clie/parse-all valid-args)))
 
   (def allopts (:parsed-sub-commands mycli ))

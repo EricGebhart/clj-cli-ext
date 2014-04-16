@@ -74,8 +74,11 @@
         (assoc :error-message
           "The following errors occurred while parsing your command:\n\n"))))
 
-(defn add-global-options [cli global-options]
-  (update-in cli [:global-options]  #(cons % global-options)))
+
+(defn add-global-options [cli options]
+  (let [global-options (:global-options cli )]
+       (assoc cli :global-options
+              (merge global-options options))))
 
 (defn add-sub-command [cli name-key options description]
   (let [sub-commands (:subcommands cli )]
@@ -83,15 +86,14 @@
               (merge sub-commands
                      {name-key [options description]}))))
 
-(defn add-sub-commands
+(defn set-sub-commands
   "Take a sub options map and add it directly.
   The map should be of the forme {:option-name [parse-opts-definition description] ...} "
   [cli sub-options-map]
   (assoc cli :subcommands sub-options-map))
 
 (defn change-usage [cli usage-function]
-  (assoc cli :usage usage-function)
-  )
+  (assoc cli :usage usage-function))
 
 (defn error-msg [cli errors]
   (str (:error-message cli )
