@@ -75,12 +75,6 @@
   ;;       ))
 
   ;; an empty command line, --help and --version only.
-  (def mycli
-    (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
-        (clie/parse-all valid-args)))
-
-  (println ((:usage mycli) mycli "this is not a summary"))
-
   ;; Add them all at once.
   (def mycli
     (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
@@ -111,6 +105,15 @@
   (println "--------Sub-command-Usage-------------")
   (println ((:sub-command-usage mycli) mycli "s3" "this is another stupid summary"))
 
+  (def mycli
+    (clie/new-cli "mytest" "1.0.0" "My test program does nothing."))
 
+  (println "--------Simple-Program-Usage-------------")
+  (println ((:usage mycli) mycli "this is a stupid summary"))
+
+  ;; ;; this will fail, print the usage and exit..
+  ;; (def mycli
+  ;;   (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
+  ;;       (clie/parse-all valid-args)))
 
   )
