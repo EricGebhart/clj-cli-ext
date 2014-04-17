@@ -74,6 +74,12 @@
   ;;       (parse-all valid-args)
   ;;       ))
 
+  ;; an empty command line, --help and --version only.
+  (def mycli
+    (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
+        (clie/parse-all valid-args)))
+
+  (println ((:usage mycli) mycli "this is not a summary"))
 
   ;; Add them all at once.
   (def mycli
@@ -101,6 +107,10 @@
   (println "-------total possible subcommands:----- ")
   (println (clie/get-subcommands (:subcommands mycli)))
   (println "--------Usage-------------")
-  (clie/usage mycli "this is a stupid summary")
+  (println ((:usage mycli) mycli "this is a stupid summary"))
   (println "--------Sub-command-Usage-------------")
-  (clie/sub-command-usage mycli "s3" "this is another stupid summary"))
+  (println ((:sub-command-usage mycli) mycli "s3" "this is another stupid summary"))
+
+
+
+  )

@@ -1,76 +1,84 @@
 (ns clj-cli-ext.core
   "An extension of clojure.tool.cli to simplify command line parsing."
   (:require [clojure.string :as string]
-            [clojure.tools.cli :refer [parse-opts]])
+            [clojure.tools.cli :refer [parse-opts summarize]])
   (:gen-class))
-
-(defrecord Cli [name version description])
 
 (declare get-actions-text)
 (declare get-subcommands-text)
 
-(defn usage [cli summary]
-  (let [name (:name cli )
-        description (:description cli )
-        version (:version cli )
-        actions (doall (string/join \newline (get-actions-text cli )))
-        subcommands (doall (string/join \newline (get-subcommands-text cli )))]
-    (->> [name "  Version: " version
+(defn help-header [cli]
+  (let  [name (:name cli )
+         description (:description cli )
+         version (:version cli )
+         actions (doall (string/join \newline (get-actions-text cli )))]
+    (->> [(string/join " " [name "Version:" version])
           ""
           description
-          ""
-          (string/join " " [ "Usage:" name "[options]"
-                             (if subcommands (string/join " " ["<subcommand>" "[options]"]))
-                             (if (not (nil? actions)) "action")])
-          ""
-          (if (not (nil? subcommands))
-            (string/join \newline ["Sub Commands:" subcommands]))
-          ""
-          "Options:"
-          summary
-          ""
-          (if (not (nil? actions))
-            (string/join \newline
-                         ["Actions:"
-                          actions
-                          ""
-                          "See" name "<command> --help for more information on each command"]))]
+          ""]
          (string/join \newline))))
 
-(defn sub-command-usage [cli subcommand summary]
-  (let [name (:name cli )
-        description (:description cli )
-        version (:version cli )
-        actions (doall (string/join \newline (get-actions-text cli )))]
-    (->> [name "  Version: " version
-          ""
-          description
-          ""
-          (string/join " " ["Usage:" name "[options]" subcommand "[options]"
-                             (if (not (nil? actions)) "action")])
+(defn help-actions [cli]
+  (let [actions (get-actions-text cli)]
+    (if (not (empty? actions))
+      (string/join \newline ["" "Actions:"
+                             (string/join \newline actions) ""])
+      nil)))
+
+(defn help-subcommands[cli]
+  (let [subcommands  (get-subcommands-text cli)]
+    (if (not (empty? subcommands))
+      (doall (string/join \newline ["" "Sub Commands:"
+                                    (string/join \newline subcommands) ""]))
+      nil)))
+
+(defn usage [cli summary]
+  (let [name (:name cli)
+        actions (help-actions cli)
+        subcommands (help-subcommands cli)]
+    (->> [(help-header cli)
+          (string/join " " [ "Usage:" name "[options]"
+                             (if (not (nil? subcommands))
+                               (string/join " " ["<subcommand>" "[options]"]))
+                             (if (not (nil? actions))
+                               "action")])
           ""
           "Options:"
           summary
-          ""
+          (if (not (nil? subcommands))
+            subcommands)
           (if (not (nil? actions))
-            (string/join \newline
-                         ["Actions:"
-                           actions
-                           ""]))]
+            actions)
+          (if (not (nil? subcommands))
+            (string/join " " [(:name cli) "<command> --help for more information on each command"]))]
+         (string/join \newline))))
+
+
+(defn sub-command-usage [cli subcommand summary]
+  (let [name (:name cli)
+        actions (help-actions cli)]
+    (->> [(help-header cli)
+          (string/join " " ["Usage:" name "[options]" subcommand "[options]"
+                            (if (not (nil? actions)) "action")])
+          ""
+          "Options:"
+          summary
+          (if (not (nil? actions))
+            actions)]
          (string/join \newline))))
 
 (defn new-cli [name version description]
   (let [version (if (nil? version) "1.0.0" version)
         description (if (nil? description) "This is a great program" description)]
 
-    (-> (->Cli name version description)
+    (-> {:name name :version version :description description}
         (assoc :global-options [["-h" "--help"] ["-V" "--version"]])
-        (assoc :usage 'usage)
+        (assoc :usage usage)
         (assoc :subcommands {})
         (assoc :parsed-sub-commands{})
         (assoc :parsed-global-options {})
         (assoc :actions {})
-        (assoc :sub-command-usage 'sub-command-usage)
+        (assoc :sub-command-usage sub-command-usage)
         (assoc :error-message
           "The following errors occurred while parsing your command:\n\n"))))
 
@@ -102,7 +110,8 @@
 (defn exit
   [status msg]
   (println msg)
-  (System/exit status))
+  (System/exit status)
+  )
 
 (defn get-actions
    "Get all the possible actions from the sub-options-map"
@@ -121,18 +130,18 @@
    "Get all the possible sub commands from the sub-options-map"
    [opt-map]
    (filter identity
-           (map #(when (not (nil? (first (% opt-map)))) %)
-                (keys opt-map))))
+             (map #(when (not (nil? (first (% opt-map)))) %)
+                  (keys opt-map))))
 
 (defn get-subcommands-text
   "For Help text. Returns all actions with their descriptions"
-  [cli ]
+  [cli]
   (let [opt-map (:subcommands cli )]
     (map #(string/join " - " [(name %) (last (% opt-map))]) (get-subcommands opt-map))))
 
  (defn find-actions
    "Find the actions in the parsed options."
-   [cli ]
+   [cli]
    (select-keys (:parsed-sub-commands cli ) (get-actions (:subcommands cli ))))
 
 (defn assoc-actions
@@ -174,11 +183,13 @@
 (defn parse-subcommands
   "Parse out the subcommands and set the action list"
   [cli argv]
-  (let [subcommands (:subcommands cli )
-        sub-options (get-subopts cli argv subcommands)]
-        (-> cli
-            (assoc :parsed-sub-commands sub-options)
-            (assoc-actions))))
+  (let [subcommands (:subcommands cli )]
+    (if (and (empty? subcommands) argv)
+        (exit 0 ((:usage cli) cli (summarize (:global-options cli)))))
+    (let [sub-options (get-subopts cli argv subcommands)]
+         (-> cli
+             (assoc :parsed-sub-commands sub-options)
+             (assoc-actions)))))
 
 (defn parse-all [cli argv]
   (let [{:keys [arguments cli]} (parse-globals cli argv)]
