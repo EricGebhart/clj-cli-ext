@@ -53,12 +53,14 @@
   (def args2 ["s3" "-b" "mybucket" "-a" "myaccesskey" "-s" "mySecret" "-f" "filekey"])
   (def args3 ["file" "-f" "somefile/path.edn"])
   (def action-args ["start" "stop" "restart"])
-  (def invalid-args ["foobar"])
+  (def bad-args ["-u" "foobar"])
+  (def bad-args2 ["foobar" "-u"])
   (def help-args ["--help"])
   (def help-args2 ["s3" "--help"])
 
   (def valid-args (concat args1 args2 args3 action-args))
-
+  (def invalid-args-last (concat valid-args bad-args))
+  (def invalid-args-first (concat bad-args valid-args))
 
   ;(println (:subcommands mycli ))
 
@@ -79,7 +81,8 @@
   (def mycli
     (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
         (clie/set-sub-commands sub-options-map)
-        (clie/parse-all valid-args)))
+        (clie/on-exception :none)
+        (clie/parse valid-args)))
 
   (def allopts (:parsed-sub-commands mycli ))
 
@@ -111,7 +114,53 @@
   (println "--------Simple-Program-Usage-------------")
   (println ((:usage mycli) mycli "this is a stupid summary"))
 
-  ;; ;; this will fail, print the usage and exit..
+  ;;; set to throw exception instead of exit on error,help or version.
+  ;;; wrap with try/catch.
+  (try
+    (def mycli
+      (-> (clie/new-cli "bad-test" "1.0.0" "My test program does nothing.")
+          (clie/set-sub-commands sub-options-map)
+          (clie/on-exception :throw)
+          (clie/parse invalid-args-first)))
+    (catch clojure.lang.ExceptionInfo e
+      (println "caught the exception")))
+
+  (try
+    (def mycli
+      (-> (clie/new-cli "help-test" "1.0.0" "My test program does nothing.")
+          (clie/set-sub-commands sub-options-map)
+          (clie/on-exception :throw)
+          (clie/parse help-args)))
+    (catch clojure.lang.ExceptionInfo e
+      (println "caught the exception")))
+
+  (try
+    (def mycli
+      (-> (clie/new-cli "sub-help-test" "1.0.0" "My test program does nothing.")
+          (clie/set-sub-commands sub-options-map)
+          (clie/on-exception :throw)
+          (clie/parse help-args2)))
+    (catch clojure.lang.ExceptionInfo e
+      (println "caught the exception")))
+
+  (def mycli
+    (-> (clie/new-cli "bad-test" "1.0.0" "My test program does nothing.")
+        (clie/set-sub-commands sub-options-map)
+        (clie/on-exception :none)
+        (clie/parse invalid-args-last)))
+
+  (def mycli
+    (-> (clie/new-cli "bad-test" "1.0.0" "My test program does nothing.")
+        (clie/set-sub-commands sub-options-map)
+        (clie/on-exception :none)
+        (clie/parse bad-args)))
+
+ (def mycli
+    (-> (clie/new-cli "bad-test" "1.0.0" "My test program does nothing.")
+        (clie/set-sub-commands sub-options-map)
+        (clie/on-exception :none)
+        (clie/parse bad-args2)))
+
   ;; (def mycli
   ;;   (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
   ;;       (clie/parse-all valid-args)))
