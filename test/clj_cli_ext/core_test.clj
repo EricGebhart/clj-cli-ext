@@ -24,14 +24,14 @@
    ["-h" "--help"]])
 
 (def s3-options
-  [["-b" "--bucket S3-Bucket" "Bucket to get yeti stack definition."]
+  [["-b" "--bucket S3-Bucket" "Bucket to get file from."]
    ["-a" "--access-key ACCESS-KEY" "S3 access key"]
    ["-s" "--secret-key SECRET-KEY" "S3 secret key"]
    ["-f" "--file-key FILE-KEY" "File-key to retrieve from bucket"]
    ["-h" "--help"]])
 
 (def file-options
-  [["-f" "--file PATH" "File path to get Yeti stack definition."]
+  [["-f" "--file PATH" "File path to get file from."]
    ["-h" "--help"]])
 
 
