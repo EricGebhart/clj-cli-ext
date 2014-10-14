@@ -1,12 +1,14 @@
 (ns clj-cli-ext.core
   "An extension of clojure.tool.cli to simplify command line parsing."
-  (:require [clojure.string :as string]
-            [clojure.tools.cli :refer [parse-opts]])
+  (:require [clojure.string :as s]
+            [clojure.tools.cli :refer [parse-opts summarize]])
   (:gen-class))
 
+;; Summarize would have been great here, except it requires
+;; compiled specs which is a private function. Parse-opts works.
 (defn summary [option-spec]
   (let [{:keys [summary]} (parse-opts nil option-spec)]
-    summary))
+  summary))
 
 (declare help-tree-group)
 
@@ -63,10 +65,7 @@
         ]
     (if (not (empty? sub-tree))
       (merge summary [type  (summarize-group sub-tree)])
-      summary
-      )
-    )
-  )
+      summary)))
 
 (defn summarize-entry2 [parent entry]
   (let [options (if (:options entry) "[options]")
@@ -77,11 +76,11 @@
         sub-tree (or commands actions group)
         type (cond commands :commands
                    actions :actions)
-        summary [(string/join " " (if (nil?  options) [(str pname)] [pname options]))]]
+        summary [(s/join " " (if (nil?  options) [(str pname)] [pname options]))]]
     (if (not (empty? sub-tree))
       (let [group-summary (summarize-group2 type sub-tree)]
         (if (or (= type  :commands) (= type :actions))
-          (merge summary [(str "<" (string/join \newline (flatten group-summary)) ">\n")])
+          (merge summary [(str "<" (s/join \newline (flatten group-summary)) ">\n")])
           (merge summary [type (summarize-group2 type sub-tree)])))
       summary)))
 
@@ -124,9 +123,9 @@
         text (->> [(if options "[options]")
                    (if commands " [commands]")
                    (if actions " [actions]")]
-                  (string/join " "))]
+                  (s/join " "))]
     (if sub-tree
-      (->> [text  (get-summary-entry sub-tree)] (string/join " "))
+      (->> [text  (get-summary-entry sub-tree)] (s/join " "))
       text)))
 
 
@@ -134,24 +133,24 @@
 
 (defn help-entry [entry]
   (let [{:keys [options sub-command actions description sub-command group]} entry
-        gname (string/capitalize (name (:name entry)))
+        gname (s/capitalize (name (:name entry)))
         sub-tree (or sub-command actions group)
         type (cond sub-command :commands
                    actions :actions)
         summary (->> [\newline gname "--" description \newline
-                      (if options (string/join \newline ["Options:" options]))]
-                     (string/join " "))]
+                      (if options (s/join \newline ["Options:" options]))]
+                     (s/join " "))]
 
     (if (not (empty? sub-tree))
       (let [group-help(help-group sub-tree)]
-        (string/join "\n" [summary (help-group sub-tree)]))
+        (s/join "\n" [summary (help-group sub-tree)]))
       summary)))
 
 (defn help-group [group]
   (let [entry (first group)
         summary (help-entry entry)]
     (if (not (empty? (rest group)))
-      (string/join [summary (help-group (rest group))])
+      (s/join [summary (help-group (rest group))])
       summary)))
 
 (defn help-summary
@@ -163,7 +162,7 @@
        (into #{})
        (drop-while empty?)
        (cons (:name cli))
-       (string/join \newline)))
+       (s/join \newline)))
 
 ;; TODO:
 ;; this should work for sub help, just pass the piece of
@@ -178,18 +177,18 @@
   (let  [name (:name cli )
          description (:description cli )
          version (:version cli )]
-    (->> [(string/join " " [name "Version:" version])
+    (->> [(s/join " " [name "Version:" version])
           ""
           description
           ""]
-         (string/join \newline))))
+         (s/join \newline))))
 
 ;; TODO: This should work for sub help too. Just need to know
 ;; which part of the tree to render.
 (defn usage
   "Basic help for the program."
   [cli summary group-name parser]
-  (string/join \newline
+  (s/join \newline
                [(help-header cli)
                 (help-summary cli)
                 (help-complete cli group-name parser)]))
@@ -244,7 +243,7 @@
   "Build a nice error message."
   [cli errors]
   (str (:error-message cli )
-       (string/join \newline
+       (s/join \newline
                     (concat errors [(str \newline \newline (:name cli) " --help, for a summary of options.")]))))
 
 (defn error-exit
@@ -274,7 +273,7 @@
 (defn unrecognized-options
  "When we have leftovers."
  [cli argv]
- (throw (ex-info (error-msg cli (merge ["Unrecognized options"] [(string/join " " argv)]))
+ (throw (ex-info (error-msg cli (merge ["Unrecognized options"] [(s/join " " argv)]))
                 {:type :usage :status 1 :cli cli
                  :message ((:usage cli) cli summary :main (get-in cli [:parsers :main]))})))
 
@@ -393,10 +392,7 @@
       (if (not (empty? arguments))
         (parse-subcommand cli key-vector parse-group arguments)
         {:cli cli :arguments arguments})
-      (parse-group-entries cli key-vector parsers arguments)
-      )
-    )
-  )
+      (parse-group-entries cli key-vector parsers arguments))))
 
 ;; Look in :options, then :parse-groups, finally go to the :sub-parsers as the next node down.
 ;; default help and version are in options.
@@ -426,3 +422,15 @@
 
     (catch clojure.lang.ExceptionInfo e
       (handle-catch cli e))))
+
+
+(defn do-parse [args parse-group {:keys [pname version description exception]
+                                       :or {pname "test"
+                                            version "1.0.0"
+                                            description "This test program does nothing."
+                                            exception :none}}]
+  (-> (new-cli pname version description)
+      (new-main-parser nil parse-group)
+      (on-exception exception)
+      (parse args)
+      (:parsed-options)))
