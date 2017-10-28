@@ -1,9 +1,8 @@
-(ns clj-cli-ext.core-test
-  (:require [clojure.test :refer :all]
-            [midje.sweet :refer :all]
-            [clj-cli-ext.core :as clie]
-            [clj-cli-ext.example :as ex]
-            [clj-cli-ext.example2 :as ex2]
+(ns org.eag.clie.core-test
+  (:require [midje.sweet :refer :all]
+            [org.eag.clie.core :as clie]
+            [org.eag.clie.example :as ex]
+            [org.eag.clie.example2 :as ex2]
             [clojure.string :as string]
             [clojure.pprint :as pprint]))
 
@@ -18,13 +17,14 @@
 (def help-args ["--help"])
 (def version-help-args ["--version"])
 (def sub-help-args ["import" "s3" "--help"])
+(def valid-args (concat args1 server-args))
 (def too-many-valid-args (concat args1 args2 args3 server-args))
 (def invalid-args-last (concat valid-args bad-args))
 (def invalid-args-first (concat bad-args valid-args))
 
 (defn test-parse [pname args except]
   (let [except (or except :none)]
-    (-> (clie/new-cli pname "1.0.0" "My test program does nothing.")
+    (-> (clie/new-cli pname "1.0.0" "My test program does nothing." "current-config")
         (clie/new-main-parser nil ex2/global-parse-groups)
         (clie/on-exception except)
         (clie/parse args)
@@ -41,7 +41,7 @@
 
 (facts "there are various ways to access the cli tree."
        (let [mycli
-             (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
+             (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing." "current-config")
                  (clie/new-main-parser nil ex2/global-parse-groups)
                  (clie/on-exception :none)
                  (clie/parse args1))]
@@ -62,19 +62,19 @@
                  mycli
                  :main
                  (->> mycli :parsers :main))) =>
-                 (contains "\n Main --  \n Options:\n  -h, --help\n  -V, --version" :gaps-ok))
+               (contains "\n Main --  \n Options:\n  -h, --help\n  -V, --version" :gaps-ok))
 
          (fact "we can summarize an entry"
                (clie/summarize-entry (clie/get-help-tree mycli :main (->> mycli :parsers :main))) =>
-                '[:main "[options]"
+               '[:main "[options]"
                  [:group ([:logging "[options]"]
-                            [:commands nil [:sub-command ([:server "[options]"
-                                                           [:sub-command ([:restart nil] [:start nil] [:stop nil])]]
-                                                          [:import "[options]"
-                                                           [:sub-command
-                                                            ([:sftp "[options]"]
-                                                             [:s3 "[options]"]
-                                                             [:file "[options]"])]])]])]])
+                          [:commands nil [:sub-command ([:server "[options]"
+                                                         [:sub-command ([:restart nil] [:start nil] [:stop nil])]]
+                                                        [:import "[options]"
+                                                         [:sub-command
+                                                          ([:sftp "[options]"]
+                                                           [:s3 "[options]"]
+                                                           [:file "[options]"])]])]])]])
 
          (fact "we can get a full help summary"
                (clie/help-summary mycli) => (contains "mytest\n [options]\n<server [options]\n<restart\nstart\nstop>"))
@@ -211,50 +211,44 @@
  []                                               '{:main {:logging {:file "/var/log/foo.log"}, :system {}}}
 
  ["process" "-s" "Set1" "-n" "fullnames"]         '{:main {:process
-                                                           {:process {:name "fullnames",
-                                                                      :scope :all,
-                                                                      :set "Set1"}},
+                                                           {:name "fullnames",
+                                                            :scope :all,
+                                                            :set "Set1"},
                                                            :logging {:file "/var/log/foo.log"}
                                                            :system {}
                                                            }}
 
  ["process" "-S" "project" ]                      '{:main {:process
-                                                           {:process
-                                                            {:scope :project}},
+                                                           {:scope :project},
                                                            :logging {:file "/var/log/foo.log"}
                                                            :system {}
                                                            }}
 
  ["process" "-n" "fullnames" "-s" "set1"]         '{:main {:process
-                                                           {:process
-                                                            {:name "fullnames",
-                                                             :scope :all,
-                                                             :set "set1"}},
+                                                           {:name "fullnames",
+                                                            :scope :all,
+                                                            :set "set1"},
                                                            :logging {:file "/var/log/foo.log"}
                                                            :system {}
                                                            }}
 
  ["stack" "file" "-f" "yetistack.edn"]            '{:main {:stack
-                                                           {:stack {:file
-                                                                    {:file "yetistack.edn"}}},
+                                                           {:file {:filename "yetistack.edn"}},
                                                            :logging {:file "/var/log/foo.log"}
                                                            :system {}
                                                            }}
 
- ["import" "-n"]                                  '{:main {:import
-                                                           {:import {:none true}},
-                                                           :logging {:file "/var/log/foo.log"}
-                                                           :system {}
-                                                           }}
+ ["import" "-n"]                                  '{:main {:import {:none true},
+                                                           :logging {:file "/var/log/foo.log"},
+                                                           :system {}}}
 
- ["import" "-s" "set1"]                           '{:main {:import
-                                                           {:import {:set "set1"}},
+ ["import" "-s" "set1"]                           '{:main {:import {:set "set1"},
                                                            :logging {:file "/var/log/foo.log"}
                                                            :system {}
                                                            }}
 
  ["import" "-s" "set1" "-l" "10"]                 '{:main {:import
-                                                           {:import {:limit 10N, :set "set1"}},
+                                                           {:limit 10N, :set "set1"},
                                                            :logging {:file "/var/log/foo.log"}
                                                            :system {}
                                                            }}
@@ -263,33 +257,36 @@
                                                            :system true}}
 
  ["-r" "test"]                                    '{:main {:logging {:file "/var/log/foo.log"},
-                                                            :system {:root "test"}}}
+                                                           :system {:root "test"}}}
 
- ["stack" "file" "-f" "foo.edn" "import" "-s" "set1" "-l" "10"]  '{:main {:import
-                                                                                  {:import {:limit 10N, :set "set1"}},
-                                                                                  :logging {:file "/var/log/foo.log"},
-                                                                                  :stack
-                                                                                  {:stack {:file {:file "foo.edn"}}},
-                                                                                  :system {}}})
+ ["stack" "file" "-f" "foo.edn" "import" "-s" "set1" "-l" "10"]  '{:main
+                                                                   {:import
+                                                                    {:limit 10N, :set "set1"},
+                                                                    :logging {:file "/var/log/foo.log"},
+                                                                    :stack {:file {:filename "foo.edn"}},
+                                                                    :system {}}}
+ )
 
+;; (parseargs ["config" "-r" "file" "-f" "foo.edn"])
 
 ;; just some stuff for fun. digging into the options tree.
+
 #_(defn test-options-print [pname args options-vector except]
-  (println (str "---------" (name (last options-vector)) "-----------"))
-  (println (string/join \newline (get-in (test-parse pname args except) options-vector))))
+    (println (str "---------" (name (last options-vector)) "-----------"))
+    (println (string/join \newline (get-in (test-parse pname args except) options-vector))))
 
 #_(defn tests
-  []
+    []
 
-  ;; an empty command line, --help and --version only.
-  ;; Add them all at once.
-  (def mycli
-    (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing.")
-        (clie/new-main-parser nil ex2/global-parse-groups)
-        (clie/on-exception :none)
-        (clie/parse args1)))
+    ;; an empty command line, --help and --version only.
+    ;; Add them all at once.
+    (def mycli
+      (-> (clie/new-cli "mytest" "1.0.0" "My test program does nothing." "current-config")
+          (clie/new-main-parser nil ex2/global-parse-groups)
+          (clie/on-exception :none)
+          (clie/parse args1)))
 
 
-  (test-options-print "MyTest" args2 [:main :commands :import :s3] :none)
-  (test-options-print "MyTest" args3 [:main :commands :import :file] :none)
-  (test-options-print "MyTest" server-args [:main :commands :server] :none))
+    (test-options-print "MyTest" args2 [:main :commands :import :s3] :none)
+    (test-options-print "MyTest" args3 [:main :commands :import :file] :none)
+    (test-options-print "MyTest" server-args [:main :commands :server] :none))

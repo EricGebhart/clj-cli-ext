@@ -1,14 +1,17 @@
-(ns clj-cli-ext.core
+(ns org.eag.clie.core
   "An extension of clojure.tool.cli to simplify command line parsing."
-  (:require [clojure.string :as s]
-            [clojure.tools.cli :refer [parse-opts summarize]])
-  (:gen-class))
+  (:gen-class)
+  (:require [clojure.string :as str]
+            [clojure.tools.cli :refer [parse-opts]]
+            [org.eag.file-access.core :as fa]
+            [org.eag.datetime-data.core :as dt]))
+
 
 ;; Summarize would have been great here, except it requires
 ;; compiled specs which is a private function. Parse-opts works.
 (defn summary [option-spec]
   (let [{:keys [summary]} (parse-opts nil option-spec)]
-  summary))
+    summary))
 
 (declare help-tree-group)
 
@@ -76,11 +79,11 @@
         sub-tree (or commands actions group)
         type (cond commands :commands
                    actions :actions)
-        summary [(s/join " " (if (nil?  options) [(str pname)] [pname options]))]]
+        summary [(str/join " " (if (nil?  options) [(str pname)] [pname options]))]]
     (if (not (empty? sub-tree))
       (let [group-summary (summarize-group2 type sub-tree)]
         (if (or (= type  :commands) (= type :actions))
-          (merge summary [(str "<" (s/join \newline (flatten group-summary)) ">\n")])
+          (merge summary [(str "<" (str/join \newline (flatten group-summary)) ">\n")])
           (merge summary [type (summarize-group2 type sub-tree)])))
       summary)))
 
@@ -123,9 +126,9 @@
         text (->> [(if options "[options]")
                    (if commands " [commands]")
                    (if actions " [actions]")]
-                  (s/join " "))]
+                  (str/join " "))]
     (if sub-tree
-      (->> [text  (get-summary-entry sub-tree)] (s/join " "))
+      (->> [text  (get-summary-entry sub-tree)] (str/join " "))
       text)))
 
 
@@ -133,24 +136,24 @@
 
 (defn help-entry [entry]
   (let [{:keys [options sub-command actions description sub-command group]} entry
-        gname (s/capitalize (name (:name entry)))
+        gname (str/capitalize (name (:name entry)))
         sub-tree (or sub-command actions group)
         type (cond sub-command :commands
                    actions :actions)
         summary (->> [\newline gname "--" description \newline
-                      (if options (s/join \newline ["Options:" options]))]
-                     (s/join " "))]
+                      (if options (str/join \newline ["Options:" options]))]
+                     (str/join " "))]
 
     (if (not (empty? sub-tree))
       (let [group-help(help-group sub-tree)]
-        (s/join "\n" [summary (help-group sub-tree)]))
+        (str/join "\n" [summary (help-group sub-tree)]))
       summary)))
 
 (defn help-group [group]
   (let [entry (first group)
         summary (help-entry entry)]
     (if (not (empty? (rest group)))
-      (s/join [summary (help-group (rest group))])
+      (str/join [summary (help-group (rest group))])
       summary)))
 
 (defn help-summary
@@ -162,7 +165,7 @@
        (into #{})
        (drop-while empty?)
        (cons (:name cli))
-       (s/join \newline)))
+       (str/join \newline)))
 
 ;; TODO:
 ;; this should work for sub help, just pass the piece of
@@ -177,33 +180,33 @@
   (let  [name (:name cli )
          description (:description cli )
          version (:version cli )]
-    (->> [(s/join " " [name "Version:" version])
+    (->> [(str/join " " [name "Version:" version])
           ""
           description
           ""]
-         (s/join \newline))))
+         (str/join \newline))))
 
 ;; TODO: This should work for sub help too. Just need to know
 ;; which part of the tree to render.
 (defn usage
   "Basic help for the program."
   [cli summary group-name parser]
-  (s/join \newline
-               [(help-header cli)
-                (help-summary cli)
-                (help-complete cli group-name parser)]))
+  (str/join \newline
+            [(help-header cli)
+             (help-summary cli)
+             (help-complete cli group-name parser)]))
 
 
 (defn new-cli
   "Initialize the command line interface map."
-  [name version description]
+  [name version description config-name]
   (let [version (if (nil? version) "1.0.0" version)
         description (if (nil? description) "This is a great program" description)]
 
-    (-> {:name name :version version :description description}
+    (-> {:name name :version version :description description :config-name config-name}
         (assoc :global-options [["-h" "--help"] ["-V" "--version"]])
         (assoc :error-message
-            "The following errors occurred while parsing your command:\n\n")
+               "The following errors occurred while parsing your command:\n\n")
         (assoc :usage usage)
         (assoc :sub-command-usage usage)
         (assoc :on-exception :exit)
@@ -243,8 +246,8 @@
   "Build a nice error message."
   [cli errors]
   (str (:error-message cli )
-       (s/join \newline
-                    (concat errors [(str \newline \newline (:name cli) " --help, for a summary of options.")]))))
+       (str/join \newline
+                 (concat errors [(str \newline \newline (:name cli) " --help, for a summary of options.")]))))
 
 (defn error-exit
   "Set the proper error message and throw an exception."
@@ -271,11 +274,11 @@
                       :message ((:sub-command-usage cli) cli summary group-name parser)}))))
 
 (defn unrecognized-options
- "When we have leftovers."
- [cli argv]
- (throw (ex-info (error-msg cli (merge ["Unrecognized options"] [(s/join " " argv)]))
-                {:type :usage :status 1 :cli cli
-                 :message ((:usage cli) cli summary :main (get-in cli [:parsers :main]))})))
+  "When we have leftovers."
+  [cli argv]
+  (throw (ex-info (error-msg cli (merge ["Unrecognized options"] [(str/join " " argv)]))
+                  {:type :usage :status 1 :cli cli
+                   :message ((:usage cli) cli summary :main (get-in cli [:parsers :main]))})))
 
 (defn exit-condition
   "Check for errors, --version and --help. If any of the above
@@ -336,7 +339,9 @@
   "Parse argumens with an entry from parse-group for its options and recurse
    through it's parse-groups."
   [cli key-vector group-name parser arguments]
-  (let [key-vector (merge key-vector group-name)
+  (let [key-vector (if-not (= (last key-vector) group-name)
+                     (merge key-vector group-name)
+                     key-vector)
         options (:options parser)
         parse-groups (:parse-groups parser)
         {:keys [arguments cli]} (if options
@@ -415,22 +420,88 @@
           (parse-group-entry cli [] :main (get-in cli [:parsers :main]) argv)]
 
       (if (not (empty? arguments))
-         (try (unrecognized-options cli arguments)
-                (catch clojure.lang.ExceptionInfo e
-                  (handle-catch cli e)))
+        (try (unrecognized-options cli arguments)
+             (catch clojure.lang.ExceptionInfo e
+               (handle-catch cli e)))
         cli))
 
     (catch clojure.lang.ExceptionInfo e
       (handle-catch cli e))))
 
+;;;;;;;; Configuration file management
 
-(defn do-parse [args parse-group {:keys [pname version description exception]
-                                       :or {pname "test"
-                                            version "1.0.0"
-                                            description "This test program does nothing."
-                                            exception :none}}]
-  (-> (new-cli pname version description)
-      (new-main-parser nil parse-group)
-      (on-exception exception)
-      (parse args)
-      (:parsed-options)))
+(defn deep-merge [v & vs]
+  (letfn [(rec-merge [v1 v2]
+            (if (and (map? v1) (map? v2))
+              (merge-with deep-merge v1 v2)
+              v2))]
+    (when (some identity vs)
+      (reduce #(rec-merge %1 %2) v vs))))
+
+(defn load-current-config [name]
+  (let [config (fa/slurp-file
+                {:source :file
+                 :filename (str/join "" [name ".edn"])})]
+    (when config (read-string config))))
+
+(defn snapshot-config [name c]
+  (when (get-in c [:config :snapshot])
+    (let [filename (str/join "_" [name (dt/now-str) ".edn"])]
+      (spit filename c)))
+  c)
+
+(defn replace-current-config
+  "if --replace on the cli, make a timestamped
+  snapshot and put in place of current config file."
+  [name c]
+  (when (get-in c [:config :replace])
+    (spit (str/join "" ["new-config-" (dt/now-str) ".edn"]) c)
+    (spit (str/join "" [name ".edn"]) c))
+  c)
+
+;;; We need to catch exceptions here for read-string. - a failure indicates an
+;;; invalid edn file.
+(defn load-new-config
+  "load a new config file from the command line args."
+  [options cli]
+  (try
+    (let [config-opt (:config options)
+          config (merge (read-string
+                         (fa/slurp-file-cmdline config-opt))
+                        {:cli- options})]
+      (replace-current-config (:config-name cli) config)) ;; if --replace
+    (catch Exception e
+      nil)))
+
+(defn load-config [options cli]
+  (let [config (load-new-config options cli)
+        snapshot (get-in options [:config :snapshot])
+        replace (get-in options [:config :replace])
+        config-name (:config-name cli)
+        config (if config
+                 (deep-merge config options)
+                 (deep-merge (load-current-config config-name) options))]
+    (when snapshot
+      (snapshot-config config-name config))
+    (when replace
+      (replace-current-config config-name config))
+    config))
+
+(defn do-parse [args parse-group
+                {:keys [pname version description exception config-name]
+                 :or {pname "test"
+                      version "1.0.0"
+                      description "This test program does nothing."
+                      exception :none
+                      config-name "current-config"}}]
+  (let [cli (new-cli pname version description config-name)
+        config (-> cli
+                   (new-main-parser nil parse-group)
+                   (on-exception exception)
+                   (parse args)
+                   (:parsed-options)
+                   (:main)
+                   (load-config cli))]
+    (if (get-in config [:config :no-execute])
+      (System/exit 0)
+      config)))

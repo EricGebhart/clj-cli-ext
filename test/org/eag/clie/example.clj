@@ -1,4 +1,5 @@
-(ns clj-cli-ext.example)
+(ns org.eag.clie.example
+  (:require [org.eag.clie.config :as conf]))
 
 (def cli-options
   ;; An option with a required argument
@@ -42,7 +43,7 @@
    ["-h" "--help"]])
 
 (def file-options
-  [["-f" "--file PATH" "File path to get file from."]
+  [["-f" "--filename PATH" "File path to get file from."]
    ["-h" "--help"]])
 
 (def github-file-options
@@ -139,18 +140,18 @@
 (def main-parse-group
   "Define global option groups. Groups organize options but do not provide a keyword for parsing."
   {:type :group
-   :parsers {:system {:options system-options :description "options for system control"}
-             :logging {:options log-options :description "Configure and control logging."}
-             ;:commands {:parse-groups sub-parsers :description "Sub Commands."}
-             :stack {:parse-groups stack-parser :description "Stack command options group."}
-             :import {:parse-groups import-parser :description "Import command options group."}
-             :process {:parse-groups process-parser :description "Process command options group."}
-             }})
+   :parsers (merge {:system {:options system-options :description "options for system control"}
+                    :logging {:options log-options :description "Configure and control logging."}
+                                        ;:commands {:parse-groups sub-parsers :description "Sub Commands."}
+                    :stack {:parse-groups stack-parser :description "Stack command options group."}
+                    :import {:parse-groups import-parser :description "Import command options group."}
+                    :process {:parse-groups process-parser :description "Process command options group."}}
+                   conf/config-parser-group-entry)})
 
 (def main-parse-group-mutually-exclusive
   "Define global option groups. Commands are mutually exclusive."
-  {:type :group
-   :parsers {:system {:options system-options :description "options for system control"}
-             :logging {:options log-options :description "Configure and control logging."}
-             :commands {:parse-groups sub-parsers :description "Sub Commands."}
-             }})
+  {:type :sub-command
+   :parsers (merge conf/config-parser-group-entry
+                   {:system {:options system-options :description "options for system control"}
+                    :logging {:options log-options :description "Configure and control logging."}
+                    :commands {:parse-groups sub-parsers :description "Sub Commands."}})})

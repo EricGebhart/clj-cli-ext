@@ -1,7 +1,14 @@
-# clj-cli-ext
-Clojure tools cli extensions, to make command line options easier.
+# org.eag.clie
+This is all because I don't want to spend a lot of time on my
+command line interface, but I want it to be nice. I want documentation,
+I want command grouping and sub-commands, I want a configuration file and
+the ability to save commandline options for easy reuse.
+I also don't want to spend time doing these same mundane things every time 
+I create a new applicaton.
+
+This is an extension to Clojure tools cli, to make command line options easier.
 Creating good commandline options and parsing them should be easy 
-and painless. 
+and painless. And the help should be automatic.
 
 This is simply an extension and wrapper around [parse-opts from org.clojure/tools.cli](https://github.com/clojure/tools.cli)
 Tools.cli is doing all the work, and you'll need to understand it
@@ -14,24 +21,32 @@ a part of the simplist command line interface. Sub commands should
 also be easy to create and use. Errors, help and version should be 
 taken care of at a central point.
 
+Loading and saving config files which can overlap with command line options 
+should also be an easy thing to do. Clie lets you save a snapshot of the configuration 
+file combined with the parse commandline options tree. There is a default configuration file,
+with the ability to create and use other configurations. 
+
+Clie does all of this and lets you determine the behavior.
+
 There is a minimal set of things needed to create a CLI with this extension.
 
 * Define some global options as needed.
 * Define some sub-command options as needed.
 * Define a sub-command map using the sub-command options and any action arguments.
-* Create a CLI
+* Create a CLI definition
  * Add the global options
  * Add the sub-command map
+ * Add the config file options to fit your CLI definitions.
 * Parse the arguments.
 
-This is all because I don't usually want to spend a lot of time on my
-command line interface, but I want it to be nice.
 
 
 ## ToDo
-It would be nice to have parse groups.
+Help should be prettier.  Sometimes the order of things on the commandline causes it to fail.
 
 ## Usage
+
+Lein: `[org.eag.clie "0.1.2"]`
 
 Create some parse-opts options as usual.
 
@@ -57,7 +72,7 @@ Create some parse-opts options as usual.
        ["-h" "--help"]])
 
     (def file-options
-      [["-f" "--file PATH" "File path to get a file from."]
+      [["-f" "--filename PATH" "File path to get a file from."]
        ["-h" "--help"]])
 
 ###Create a list of subcommands as needed, 
@@ -95,6 +110,23 @@ Actions are specified here as well. They require no options definition.
 These options are taken care of. The default global options are --help and --version. If
 there is an error, or --help or --version. The appropriate text is generated and the system exits.
 Sub-command usage is displayed when --help is given after a sub-command.
+
+## config files
+There is by default a config file. You can set the name, but by default it is `current-config`.
+If you add the config file parser to your main parser group you get *--snapshot*, *--replace* 
+and *file* which has the file sub-options to get files locally, from github, S3, or sftp.
+
+If you use *--replace* the new file will make a timestamped snapshot of itself _new-config-<timestamp>.edn_ 
+and replace the current-config.
+
+When replacing the current configuration with a new one, the unmerged, original configuration is saved.
+
+Taking a snapshot will create a config file named _current-config-snapshot-<timestamp>.edn_ which is the 
+configuration after merging the configuration file with the CLI options.
+
+The config file can have anything you like to have in it. When read, the commandline options will be
+merged into the configuration tree. When taking snapshots it is the merged version of the configuration 
+that is saved.
 
 ## Adding or changing the global options.
 The default global options are -h --help, and -V --version. More global options can be added
